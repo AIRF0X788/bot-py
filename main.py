@@ -43,7 +43,7 @@ class CommandHistory:
         except FileNotFoundError:
             self.history = {}
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='$', intents=intents)
 
 history_manager = CommandHistory()
 history_manager.load_history()
@@ -68,11 +68,44 @@ async def lc(ctx):
 @bot.command()
 async def ac(ctx):
     user_id = ctx.author.id
-    ac = history_manager.get_ac(user_id)
-    if isinstance(ac, list):
-        await ctx.send(f"Voici l'historique de toutes tes commandes : {', '.join(ac)}")
+    commands = history_manager.get_ac(user_id)
+    
+    if isinstance(commands, list) and commands:
+        pages = [commands[i:i + 5] for i in range(0, len(commands), 5)]
+        current_page = 0
+
+        if len(pages) == 1:
+            embed = discord.Embed(title="Historique des commandes", description='\n'.join(commands))
+            msg = await ctx.send(embed=embed)
+            return
+
+        embed = discord.Embed(title="Historique des commandes", description='\n'.join(pages[current_page]))
+        msg = await ctx.send(embed=embed)
+        await msg.add_reaction("⬅️")
+        await msg.add_reaction("➡️")
+
+        def check(reaction, user):
+            return user == ctx.author and reaction.message.id == msg.id and str(reaction.emoji) in ["⬅️", "➡️"]
+
+        while True:
+            try:
+                reaction, user = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+
+                if str(reaction.emoji) == "➡️" and current_page < len(pages) - 1:
+                    current_page += 1
+                elif str(reaction.emoji) == "⬅️" and current_page > 0:
+                    current_page -= 1
+
+                embed.description = '\n'.join(pages[current_page])
+                await msg.edit(embed=embed)
+                await msg.remove_reaction(reaction, user)
+
+            except Exception as e:
+                print(e)  # Handle exception appropriately or break the loop
+
     else:
-        await ctx.send(ac)
+        await ctx.send(commands)
+
 
 @bot.command()
 async def ch(ctx):
